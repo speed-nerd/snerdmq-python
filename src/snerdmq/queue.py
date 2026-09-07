@@ -1,7 +1,6 @@
 import asyncio
 import json
 import os
-import signal
 import sys
 from typing import Callable, Awaitable, Dict, Any, Optional
 import contextvars
@@ -33,12 +32,6 @@ class SnerdQueue:
         self.binary_path = binary_path
         self.storage_path = storage_path
 
-        # Handle graceful shutdown signals
-        for sig in (signal.SIGINT, signal.SIGTERM):
-            try:
-                asyncio.get_running_loop().add_signal_handler(sig, self.shutdown)
-            except NotImplementedError:
-                pass # Windows does not support add_signal_handler easily
 
     async def start_listening(self):
         """Starts the rust daemon and the event loop to listen to its output."""
