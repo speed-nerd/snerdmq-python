@@ -1,6 +1,6 @@
 <div align="center">
   <img src="./assets/Designer-9.png" height="120" alt="SnerdMQ Python Logo" />
-  <h1>🚀 SnerdMQ Python SDK v0.3.4</h1>
+  <h1>🚀 SnerdMQ Python SDK v0.3.5</h1>
   <p>The official Python SDK for SnerdMQ. Execute robust, C-speed background jobs in Python without Redis, Celery, or complex config.</p>
 
   [![PyPI version](https://img.shields.io/pypi/v/snerdmq-python)](https://pypi.org/project/snerdmq-python)
@@ -10,7 +10,7 @@
 
 This is the official Python client for **SnerdMQ**. It acts as a lightweight, elegant wrapper over the underlying Rust background daemon. It handles all JSON-RPC communication, standard I/O piping, and event loop orchestration so you can write background jobs natively in Python using `asyncio`.
 
-## ✨ v0.3.4 AI Features
+## ✨ v0.3.5 AI Features
 - **Smart API Rate-Limiting**: Natively tracks `rate_limit_group` execution velocity to prevent 429 "Too Many Requests" API errors.
 - **Payload-Hashing Deduplication**: Automatically computes cryptographic hashes to drop duplicate tasks instantly.
 - **Dynamic Float Prioritization**: A native Binary Max-Heap bypasses standard FIFO rules for high urgency tasks.
@@ -19,7 +19,7 @@ This is the official Python client for **SnerdMQ**. It acts as a lightweight, el
 - **Zero Rust Required**: Our CLI tool automatically downloads the pre-compiled C-speed Rust binary for your OS.
 - **Native Asyncio**: Written to seamlessly integrate with modern Python `async/await` applications (like FastAPI or Sanic).
 
-### ⚙️ Advanced Task Configuration (v0.3.4)
+### ⚙️ Advanced Task Configuration (v0.3.5)
 To power complex AI workflows, tasks can now be configured with advanced orchestration parameters:
 
 * **`auto_dedupe` (`bool`)**: If set to `True`, the daemon computes a cryptographic hash of the `task_type` and `data`. If an identical payload is currently sitting in the queue pending execution, this new task is silently dropped. Excellent for preventing duplicate generative AI requests from trigger-happy users!
@@ -108,13 +108,19 @@ async def main():
 
     # 4. Start the event loop (listens to the Rust daemon indefinitely)
     print("SnerdMQ Python SDK is listening for jobs...")
-    await queue.start_listening()
+    try:
+        await queue.start_listening()
+    except asyncio.CancelledError:
+        pass
+    finally:
+        print("Shutting down SnerdMQ...")
+        await queue.shutdown()
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("Shutting down gracefully...")
+        pass
 ```
 
 ### ☠️ Dead Letter Queue (Handling Permanent Failures)
