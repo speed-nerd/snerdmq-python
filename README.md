@@ -1,6 +1,6 @@
 <div align="center">
   <img src="./assets/Designer-9.png" height="120" alt="SnerdMQ Python Logo" />
-  <h1>🚀 SnerdMQ Python SDK v0.3.7</h1>
+  <h1>🚀 SnerdMQ Python SDK v0.3.8</h1>
   <p>The official Python SDK for SnerdMQ. Execute robust, C-speed background jobs in Python without Redis, Celery, or complex config.</p>
 
   [![PyPI version](https://img.shields.io/pypi/v/snerdmq-python)](https://pypi.org/project/snerdmq-python)
@@ -10,7 +10,7 @@
 
 This is the official Python client for **SnerdMQ**. It acts as a lightweight, elegant wrapper over the underlying Rust background daemon. It handles all JSON-RPC communication, standard I/O piping, and event loop orchestration so you can write background jobs natively in Python using `asyncio`.
 
-## ✨ v0.3.7 AI Features
+## ✨ v0.3.8 AI Features
 - **Smart API Rate-Limiting**: Natively tracks `rate_limit_group` execution velocity to prevent 429 "Too Many Requests" API errors.
 - **Payload-Hashing Deduplication**: Automatically computes cryptographic hashes to drop duplicate tasks instantly.
 - **Dynamic Float Prioritization**: A native Binary Max-Heap bypasses standard FIFO rules for high urgency tasks.
@@ -19,7 +19,7 @@ This is the official Python client for **SnerdMQ**. It acts as a lightweight, el
 - **Zero Rust Required**: Our CLI tool automatically downloads the pre-compiled C-speed Rust binary for your OS.
 - **Native Asyncio**: Written to seamlessly integrate with modern Python `async/await` applications (like FastAPI or Sanic).
 
-### ⚙️ Advanced Task Configuration (v0.3.7)
+### ⚙️ Advanced Task Configuration (v0.3.8)
 To power complex AI workflows, tasks can now be configured with advanced orchestration parameters:
 
 * **`auto_dedupe` (`bool`)**: If set to `True`, the daemon computes a cryptographic hash of the `task_type` and `data`. If an identical payload is currently sitting in the queue pending execution, this new task is silently dropped. Excellent for preventing duplicate generative AI requests from trigger-happy users!
@@ -257,3 +257,41 @@ queue = SnerdQueue(storage_path='/var/data/snerd')  # per-server storage
 A shared network drive (AWS EFS or NFS) is still a good home for that storage when a single instance needs durable state — e.g. a container that restarts but must keep its queue. Native OS file locking (`flock`) keeps writes safe — no Redis required.
 
 *Built with ❤️ for John Wick tier engineering.*
+
+
+## Architecture Best Practices
+
+When building production applications with SnerdMQ, it is recommended to initialize the queue as a Singleton, isolate your domain workers into separate files/functions, use Dead Letter Queues (DLQ) for failed tasks via `RegisterMaxRetryHandler`, and ensure manual graceful shutdown. The embedded Dashboard UI can also be easily served from the same instance.
+
+```python
+import asyncio
+from snerdmq import SnerdQueue
+
+queue = SnerdQueue(storage_path="./.snerdata")
+
+async def send_email(data):
+    print(f"Sending email to {data['email']}...")
+
+async def dlq_send_email(data):
+    print(f"Email to {data['email']} failed permanently. Dead letter processing...")
+
+async def process_image(data):
+    print(f"Processing image {data['imageId']}...")
+
+def init_workers():
+    queue.register_handler('send_email', send_email)
+    queue.register_max_retry_handler('send_email', dlq_send_email)
+    queue.register_handler('process_image', process_image)
+
+async def main():
+    init_workers()
+    queue.start_dashboard(8080)
+    await queue.start_listening()
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        # Gracefully shut down on Ctrl+C
+        queue.shutdown()
+```
