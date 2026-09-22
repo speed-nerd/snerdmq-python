@@ -1,8 +1,8 @@
 import asyncio
 import json
 import os
-import signal
 import sys
+import signal
 from typing import Callable, Awaitable, Dict, Any, Optional
 import contextvars
 from aiohttp import web

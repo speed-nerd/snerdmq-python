@@ -1,2 +1,0 @@
-{"taskId":"pytest-job-1","retryCount":0,"maxRetries":3,"retryAfterHours":0.0,"retryAfterTime":"2026-09-05T17:07:28.416950Z","taskData":"{\"user_id\": \"john_wick\", \"message\": \"Baba Yaga\"}","taskType":"test_notification","executeAt":"2026-09-05T17:07:28.416950Z"}
-{"taskId":"pytest-job-1","retryCount":0,"maxRetries":3,"retryAfterHours":0.0,"retryAfterTime":"2026-09-05T17:07:28.416950Z","taskData":"{\"user_id\": \"john_wick\", \"message\": \"Baba Yaga\"}","taskType":"test_notification","deletedAt":"2026-09-05T17:07:29.935672Z","executeAt":"2026-09-05T17:07:28.416950Z"}
