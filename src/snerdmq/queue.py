@@ -213,7 +213,7 @@ class SnerdQueue:
         """Registers an async function to handle permanently failed tasks of a specific type."""
         self.max_retry_handlers[task_type] = handler
 
-    async def enqueue(self, task_id: str, task_type: str, data: Any, max_retries: int = 3, retry_after_hours: float = 0.0, rate_limit_group: Optional[str] = None, max_per_minute: Optional[int] = None, auto_dedupe: Optional[bool] = None, urgency_score: Optional[float] = None, execute_at: Optional[str] = None, cron: Optional[str] = None, webhook_url: Optional[str] = None, max_execution_seconds: Optional[int] = None):
+    async def enqueue(self, task_id: str, task_type: str, data: Any, max_retries: int = 3, retry_after_hours: float = 0.0, rate_limit_group: Optional[str] = None, max_per_minute: Optional[int] = None, auto_dedupe: Optional[bool] = None, urgency_score: Optional[float] = None, execute_at: Optional[str] = None, cron: Optional[str] = None, webhook_url: Optional[str] = None, max_execution_seconds: Optional[int] = None, pool: Optional[str] = None):
         """Enqueues a new background job."""
         if self.is_shutting_down:
             raise RuntimeError("[Snerd] Queue is shutting down; enqueue rejected.")
@@ -251,6 +251,8 @@ class SnerdQueue:
             payload['webhook_url'] = webhook_url
         if max_execution_seconds is not None:
             payload['max_execution_seconds'] = max_execution_seconds
+        if pool is not None:
+            payload['pool'] = pool
 
         loop = asyncio.get_running_loop()
         future = loop.create_future()
