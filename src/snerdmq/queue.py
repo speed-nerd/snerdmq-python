@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import sys
+import signal
 from typing import Callable, Awaitable, Dict, Any, Optional
 import contextvars
 from aiohttp import web
@@ -11,7 +12,14 @@ _current_task_id = contextvars.ContextVar('current_task_id', default=None)
 
 
 class SnerdQueue:
-    def __init__(self, binary_path: Optional[str] = None, storage_path: Optional[str] = None):
+    def __init__(
+        self,
+        binary_path: Optional[str] = None,
+        storage_path: Optional[str] = None,
+        shards: Optional[int] = None,
+        max_local_shards: Optional[int] = None,
+        max_workers: Optional[int] = None,
+    ):
         self.handlers: Dict[str, Callable[[Any], Awaitable[None]]] = {}
         self.max_retry_handlers: Dict[str, Callable[[Any], Awaitable[None]]] = {}
         self.process: Optional[asyncio.subprocess.Process] = None
@@ -20,7 +28,16 @@ class SnerdQueue:
         self.pending_enqueues: Dict[str, asyncio.Future] = {}
         self.progress_listeners = set()
         self.dashboard_runner = None
-        
+        self.owned_shards: list = []
+        self._env_overrides: Dict[str, str] = {}
+
+        if shards is not None:
+            self._env_overrides['SNERD_SHARDS'] = str(shards)
+        if max_local_shards is not None:
+            self._env_overrides['SNERD_MAX_SHARDS'] = str(max_local_shards)
+        if max_workers is not None:
+            self._env_overrides['SNERD_MAX_WORKERS'] = str(max_workers)
+
         if not binary_path:
             package_dir = os.path.dirname(os.path.abspath(__file__))
             ext = '.exe' if os.name == 'nt' else ''
@@ -32,19 +49,29 @@ class SnerdQueue:
         self.binary_path = binary_path
         self.storage_path = storage_path
 
+        # Handle graceful shutdown signals
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            try:
+                asyncio.get_running_loop().add_signal_handler(sig, lambda: asyncio.create_task(self.shutdown()))
+            except (NotImplementedError, RuntimeError):
+                pass  # Windows or no running loop
 
     async def start_listening(self):
         """Starts the rust daemon and the event loop to listen to its output."""
         args = [self.storage_path] if self.storage_path else []
+        env = {**os.environ, **self._env_overrides}
         self.process = await asyncio.create_subprocess_exec(
             self.binary_path, *args,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            stderr=asyncio.subprocess.PIPE,
+            env=env
         )
 
         if not self.process.stdout or not self.process.stderr:
             raise RuntimeError("[Snerd] Failed to establish standard I/O pipes.")
+
+        self.engine_alive = True
 
         # Re-send all registrations in case we are reconnecting
         for task_type in self.handlers.keys():
@@ -52,13 +79,15 @@ class SnerdQueue:
 
         # Run stdout and stderr readers concurrently as tasks
         loop = asyncio.get_running_loop()
-        self.engine_alive = True
         loop.create_task(self._read_stdout())
         loop.create_task(self._read_stderr())
 
     async def _read_stdout(self):
         assert self.process and self.process.stdout
-        while not self.is_shutting_down:
+        # Keep reading even while shutting down — drain cooperation requires
+        # us to keep processing execute messages and sending results back until
+        # the daemon exits on its own.
+        while True:
             line = await self.process.stdout.readline()
             if not line:
                 break
@@ -67,10 +96,12 @@ class SnerdQueue:
                 continue
 
             try:
+                print(f"[DEBUG SDK] Received line: {line_str}")
                 msg = json.loads(line_str)
                 # Dispatch handler without blocking the read loop
                 asyncio.create_task(self._handle_engine_message(msg))
             except json.JSONDecodeError:
+                print(f"[DEBUG SDK] Invalid JSON: {line_str}")
                 pass
 
         if not self.is_shutting_down:
@@ -105,6 +136,10 @@ class SnerdQueue:
                 del self.pending_enqueues[task_id]
             else:
                 print(f"[Snerd] Error from engine: {msg.get('message')}", file=sys.stderr)
+        elif msg.get('action') == 'membership':
+            # Informational only — daemon owns all routing.
+            self.owned_shards = msg.get('owned', [])
+            print(f"[Snerd] Cluster: queue={msg.get('queue')} shards={msg.get('shards')} owned={self.owned_shards} version={msg.get('version')}", file=sys.stderr)
         elif msg.get('action') == 'execute':
             task_type = msg.get('task_type')
             task_id = msg.get('task_id')
@@ -161,7 +196,7 @@ class SnerdQueue:
                 print(f"[Snerd] Dead Letter Queue: Task {task_id} ({task_type}) permanently failed.", file=sys.stderr)
 
     async def _send(self, msg: dict):
-        if self.process and self.process.stdin and not self.is_shutting_down:
+        if self.process and self.process.stdin and self.engine_alive:
             try:
                 self.process.stdin.write((json.dumps(msg) + '\n').encode())
                 await self.process.stdin.drain()
@@ -178,8 +213,10 @@ class SnerdQueue:
         """Registers an async function to handle permanently failed tasks of a specific type."""
         self.max_retry_handlers[task_type] = handler
 
-    async def enqueue(self, task_id: str, task_type: str, data: Any, max_retries: int = 3, retry_after_hours: float = 0.0, rate_limit_group: Optional[str] = None, max_per_minute: Optional[int] = None, auto_dedupe: Optional[bool] = None, urgency_score: Optional[float] = None, execute_at: Optional[str] = None, cron: Optional[str] = None, webhook_url: Optional[str] = None, max_execution_seconds: Optional[int] = None):
+    async def enqueue(self, task_id: str, task_type: str, data: Any, max_retries: int = 3, retry_after_hours: float = 0.0, rate_limit_group: Optional[str] = None, max_per_minute: Optional[int] = None, auto_dedupe: Optional[bool] = None, urgency_score: Optional[float] = None, execute_at: Optional[str] = None, cron: Optional[str] = None, webhook_url: Optional[str] = None, max_execution_seconds: Optional[int] = None, pool: Optional[str] = None):
         """Enqueues a new background job."""
+        if self.is_shutting_down:
+            raise RuntimeError("[Snerd] Queue is shutting down; enqueue rejected.")
         if not self.process:
             raise RuntimeError("[Snerd] Cannot enqueue task: Queue is not running. Call start_listening() first.")
         if not self.engine_alive:
@@ -214,6 +251,8 @@ class SnerdQueue:
             payload['webhook_url'] = webhook_url
         if max_execution_seconds is not None:
             payload['max_execution_seconds'] = max_execution_seconds
+        if pool is not None:
+            payload['pool'] = pool
 
         loop = asyncio.get_running_loop()
         future = loop.create_future()
@@ -221,16 +260,37 @@ class SnerdQueue:
         await self._send(payload)
         await future
 
-    def shutdown(self):
-        """Gracefully kills the Rust daemon."""
+    async def shutdown(self):
+        """Gracefully shuts down the Rust daemon with drain cooperation.
+
+        Sends SIGTERM to trigger the daemon's drain sequence, then keeps the
+        result-response path alive until the daemon exits on its own.
+        New enqueues are rejected immediately.
+        """
         if self.is_shutting_down:
             return
         self.is_shutting_down = True
         if self.process:
             try:
-                self.process.terminate()
+                self.process.terminate()  # SIGTERM — triggers daemon drain
             except ProcessLookupError:
                 pass
+            # Wait for daemon to exit (it will do so after drain completes).
+            # _read_stdout keeps running and processing execute responses
+            # until the pipe closes, which is exactly what we want.
+            try:
+                await asyncio.wait_for(self.process.wait(), timeout=35.0)
+            except asyncio.TimeoutError:
+                # Force-kill if drain exceeds timeout.
+                try:
+                    self.process.kill()
+                except ProcessLookupError:
+                    pass
+        # Reject any leftover enqueues.
+        for task_id, future in list(self.pending_enqueues.items()):
+            if not future.done():
+                future.set_exception(RuntimeError(f"[Snerd] Engine shut down before ack for task '{task_id}'"))
+        self.pending_enqueues.clear()
 
 
     async def yield_progress_async(self, data: Any):
