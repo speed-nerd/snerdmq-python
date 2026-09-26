@@ -309,6 +309,39 @@ await queue.enqueue(
 ```
 
 
+### 🕒 Cron & Scheduled Jobs
+```python
+# Run every day at 08:00
+await queue.enqueue(
+    task_id='daily-digest',
+    task_type='send_email',
+    data={'template': 'daily'},
+    cron='0 8 * * *'
+)
+```
+
+### 🛑 Hard Timeouts
+```python
+# Forcefully kill if running > 5 mins
+await queue.enqueue(
+    task_id='risky-task',
+    task_type='process_data',
+    data={},
+    max_execution_seconds=300
+)
+```
+
+### 🌐 Webhook Callbacks
+```python
+# Execute via HTTP instead of local handlers
+await queue.enqueue(
+    task_id='serverless-task',
+    task_type='resize_image',
+    data={'img': 'cat.jpg'},
+    webhook_url='https://api.example.com/webhooks/snerdmq'
+)
+```
+
 *Built with ❤️ for John Wick tier engineering.*
 
 
