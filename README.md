@@ -5,10 +5,12 @@
 
   [![PyPI version](https://img.shields.io/pypi/v/snerdmq-python)](https://pypi.org/project/snerdmq-python)
   [![License](https://img.shields.io/pypi/l/snerdmq-python)](https://github.com/speed-nerd/snerdmq-python/blob/main/LICENSE)
-  [![Docs](https://img.shields.io/badge/docs-speed--nerd.github.io-blue)](https://speed-nerd.github.io/docs/)
+  [![Docs](https://img.shields.io/badge/docs-speed--nerd.github.io-blue)](https://speed-nerd.github.io/docs/sdks/python/)
 </div>
 
 This is the official Python client for **SnerdMQ**. It acts as a lightweight, elegant wrapper over the underlying Rust background daemon. It handles all JSON-RPC communication, standard I/O piping, and event loop orchestration so you can write background jobs natively in Python using `asyncio`.
+
+> 📚 **Full Documentation & Advanced Features:** Check out the [official Python SDK documentation](https://speed-nerd.github.io/docs/sdks/python/) on our docs site!
 
 ## ✨ v0.4.1 AI Features
 - **Worker Pools**: Prevent slow generative AI tasks from starving fast DB tasks by dedicating workers to specific pools (e.g. `"urgent"`).
