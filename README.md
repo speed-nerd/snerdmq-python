@@ -1,6 +1,6 @@
 <div align="center">
   <img src="./assets/Designer-9.png" height="120" alt="SnerdMQ Python Logo" />
-  <h1>🚀 SnerdMQ Python SDK v0.3.8</h1>
+  <h1>🚀 SnerdMQ Python SDK v0.4.0</h1>
   <p>The official Python SDK for SnerdMQ. Execute robust, C-speed background jobs in Python without Redis, Celery, or complex config.</p>
 
   [![PyPI version](https://img.shields.io/pypi/v/snerdmq-python)](https://pypi.org/project/snerdmq-python)
@@ -10,7 +10,9 @@
 
 This is the official Python client for **SnerdMQ**. It acts as a lightweight, elegant wrapper over the underlying Rust background daemon. It handles all JSON-RPC communication, standard I/O piping, and event loop orchestration so you can write background jobs natively in Python using `asyncio`.
 
-## ✨ v0.3.8 AI Features
+## ✨ v0.4.0 AI Features
+- **Worker Pools**: Prevent slow generative AI tasks from starving fast DB tasks by dedicating workers to specific pools (e.g. `"urgent"`).
+- **Sharded Queues**: Distribute load across multiple queue nodes safely using file-backed lock sharding (`max_local_shards`).
 - **Smart API Rate-Limiting**: Natively tracks `rate_limit_group` execution velocity to prevent 429 "Too Many Requests" API errors.
 - **Payload-Hashing Deduplication**: Automatically computes cryptographic hashes to drop duplicate tasks instantly.
 - **Dynamic Float Prioritization**: A native Binary Max-Heap bypasses standard FIFO rules for high urgency tasks.
@@ -20,7 +22,7 @@ This is the official Python client for **SnerdMQ**. It acts as a lightweight, el
 - **Zero Rust Required**: Our CLI tool automatically downloads the pre-compiled C-speed Rust binary for your OS.
 - **Native Asyncio**: Written to seamlessly integrate with modern Python `async/await` applications (like FastAPI or Sanic).
 
-### ⚙️ Advanced Task Configuration (v0.3.8)
+### ⚙️ Advanced Task Configuration (v0.4.0)
 To power complex AI workflows, tasks can now be configured with advanced orchestration parameters:
 
 * **`auto_dedupe` (`bool`)**: If set to `True`, the daemon computes a cryptographic hash of the `task_type` and `data`. If an identical payload is currently sitting in the queue pending execution, this new task is silently dropped. Excellent for preventing duplicate generative AI requests from trigger-happy users!
@@ -33,6 +35,7 @@ To power complex AI workflows, tasks can now be configured with advanced orchest
 * **`webhook_url` (`str`)**: By providing a webhook URL, SnerdMQ will bypass your local Python async handlers and dispatch the task payload via an HTTP POST request directly to the specified URL.
 * **`max_execution_seconds` (`int`)**: Optional hard timeout in seconds. If execution takes longer, it's marked as failed.
 * **`trigger_after_ids` (`list` of `str`)**: A list of parent task IDs that must complete successfully before this task is allowed to dispatch. Enables complex DAG workflows natively within the queue.
+* **`pool` (`str`)**: Dedicate this task to a specific worker pool (e.g. `"urgent"`).
 
 ### Note on Hard Timeouts (`max_execution_seconds`)
 When `max_execution_seconds` is provided, the Python SDK wraps the execution of your async handler in `asyncio.wait_for`. If the task takes longer than the timeout, it will be cancelled via `asyncio.exceptions.TimeoutError` and marked as failed. The background Rust daemon also enforces this timeout at the IPC level.
@@ -106,6 +109,8 @@ async def main():
         urgency_score=0.99,          # Float to the front of the queue
         webhook_url='https://api.example.com/webhook',  # Execute via HTTP instead of local handlers
         max_execution_seconds=300,   # Hard timeout
+        pool='urgent',               # Dedicate to a specific worker pool
+        trigger_after_ids=['parent-123'], # Wait for parent tasks to complete
     )
 
     # 4. Start the event loop (listens to the Rust daemon indefinitely)
@@ -231,7 +236,11 @@ second = SnerdQueue()  # ❌ daemon refuses to start:
 # "Another daemon is already running on storage '.snerdata'"
 ```
 
-This applies across processes too — with **Gunicorn/Uvicorn multi-worker setups, every worker is a separate process** that spawns its own daemon, so each worker needs its own `storage_path` (or run a single dedicated worker process for jobs).
+This applies across processes too — with **Gunicorn/Uvicorn multi-worker setups, every worker is a separate process**. To safely scale on the same disk without double-executing jobs, you must initialize the daemon with `max_local_shards`:
+```python
+# SnerdMQ will partition the .snerdata locks across shards
+queue = SnerdQueue(max_local_shards=4, max_workers={"urgent": 5})
+```
 
 ### 🔀 Need multiple queues? Give each one its own storage
 
