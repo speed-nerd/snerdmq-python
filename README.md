@@ -290,12 +290,7 @@ Simply pass an array of parent task IDs to the `trigger_after_ids` parameter whe
 
 ### 🍕 Sharded Queues (Scaling Out)
 
-SnerdMQ natively supports distributed execution across multiple servers while acting as a single logical queue. Just mount a shared storage drive (like AWS EFS) and boot multiple daemons. They will automatically lock and negotiate ownership of shards. No config required in the SDK for enqueueing! Just tell the daemon how many shards to claim on boot:
-
-```python
-# Boot a multi-tenant daemon that owns up to 4 shards locally
-queue = SnerdQueue(max_local_shards=4)
-```
+SnerdMQ natively supports distributed execution across multiple servers while acting as a single logical queue. Just mount a shared storage drive (like AWS EFS) and boot multiple daemons. They will automatically lock and negotiate ownership of shards. No config required in the SDK for enqueueing! Just tell the daemon how many shards to claim on boot.
 
 ```python
 # 1. Worker Pools: Route tasks to the 'urgent' pool
@@ -315,38 +310,22 @@ await queue.enqueue(
 )
 ```
 
-
 ### 🕒 Cron & Scheduled Jobs
 ```python
 # Run every day at 08:00
-await queue.enqueue(
-    task_id='daily-digest',
-    task_type='send_email',
-    data={'template': 'daily'},
-    cron='0 8 * * *'
-)
+await queue.enqueue(task_id='daily-digest', task_type='send_email', data={'template': 'daily'}, cron='0 8 * * *')
 ```
 
 ### 🛑 Hard Timeouts
 ```python
 # Forcefully kill if running > 5 mins
-await queue.enqueue(
-    task_id='risky-task',
-    task_type='process_data',
-    data={},
-    max_execution_seconds=300
-)
+await queue.enqueue(task_id='risky-task', task_type='process_data', data={}, max_execution_seconds=300)
 ```
 
 ### 🌐 Webhook Callbacks
 ```python
 # Execute via HTTP instead of local handlers
-await queue.enqueue(
-    task_id='serverless-task',
-    task_type='resize_image',
-    data={'img': 'cat.jpg'},
-    webhook_url='https://api.example.com/webhooks/snerdmq'
-)
+await queue.enqueue(task_id='serverless-task', task_type='resize_image', data={'img': 'cat.jpg'}, webhook_url='https://api.example.com/webhooks/snerdmq')
 ```
 
 *Built with ❤️ for John Wick tier engineering.*
