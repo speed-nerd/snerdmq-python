@@ -1,6 +1,6 @@
 <div align="center">
   <img src="./assets/Designer-9.png" height="120" alt="SnerdMQ Python Logo" />
-  <h1>🚀 SnerdMQ Python SDK v0.4.1</h1>
+  <h1>🚀 SnerdMQ Python SDK v0.4.2</h1>
   <p>The official Python SDK for SnerdMQ. Execute robust, C-speed background jobs in Python without Redis, Celery, or complex config.</p>
 
   [![PyPI version](https://img.shields.io/pypi/v/snerdmq-python)](https://pypi.org/project/snerdmq-python)
@@ -12,7 +12,7 @@ This is the official Python client for **SnerdMQ**. It acts as a lightweight, el
 
 > 📚 **Full Documentation & Advanced Features:** Check out the [official Python SDK documentation](https://speed-nerd.github.io/docs/sdks/python/) on our docs site!
 
-## ✨ v0.4.1 AI Features
+## ✨ v0.4.2 AI Features
 - **Worker Pools**: Prevent slow generative AI tasks from starving fast DB tasks by dedicating workers to specific pools (e.g. `"urgent"`).
 - **Sharded Queues**: Distribute load across multiple queue nodes safely using file-backed lock sharding (`max_local_shards`).
 - **Smart API Rate-Limiting**: Natively tracks `rate_limit_group` execution velocity to prevent 429 "Too Many Requests" API errors.
@@ -24,7 +24,7 @@ This is the official Python client for **SnerdMQ**. It acts as a lightweight, el
 - **Zero Rust Required**: Our CLI tool automatically downloads the pre-compiled C-speed Rust binary for your OS.
 - **Native Asyncio**: Written to seamlessly integrate with modern Python `async/await` applications (like FastAPI or Sanic).
 
-### ⚙️ Advanced Task Configuration (v0.4.1)
+### ⚙️ Advanced Task Configuration (v0.4.2)
 To power complex AI workflows, tasks can now be configured with advanced orchestration parameters:
 
 * **`auto_dedupe` (`bool`)**: If set to `True`, the daemon computes a cryptographic hash of the `task_type` and `data`. If an identical payload is currently sitting in the queue pending execution, this new task is silently dropped. Excellent for preventing duplicate generative AI requests from trigger-happy users!
@@ -328,7 +328,7 @@ await queue.enqueue(task_id='risky-task', task_type='process_data', data={}, max
 await queue.enqueue(task_id='serverless-task', task_type='resize_image', data={'img': 'cat.jpg'}, webhook_url='https://api.example.com/webhooks/snerdmq')
 ```
 
-*Built with ❤️ for John Wick tier engineering.*
+
 
 
 ## Architecture Best Practices
@@ -367,3 +367,5 @@ if __name__ == "__main__":
         # Gracefully shut down on Ctrl+C
         queue.shutdown()
 ```
+
+*Built with ❤️ for John Wick tier engineering.*
